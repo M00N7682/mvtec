@@ -1,0 +1,16 @@
+.DS_Store
+__pycache__/
+.pytest_cache/
+
+# Local dependency folders (do not commit)
+.pydeps*/
+.pydeps
+
+# Data (do not commit)
+data/
+*.tar.xz
+
+# Outputs
+outputs/
+
+
