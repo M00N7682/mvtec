@@ -1,0 +1,115 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{kotex}
+
+\title{RDI-Net: 극단적 클래스 불균형 환경에서의 결함 삽입 기반 이미지 합성 및 분류기 기반 이상 탐지}
+\author{문덕룡}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+산업 결함 데이터는 정상 샘플이 풍부한 반면 결함 샘플은 극히 희소하여, 데이터 불균형이 학습 성능과 일반화에 구조적 제약으로 작용한다.
+이러한 환경에서 합성 데이터는 유망한 대안이지만, 단순한 복제나 나이브한 붙여넣기 방식은 경계 인공물(artifact)을 유발하거나 결함 패턴의 구조를 왜곡하여 다운스트림 탐지 효용을 떨어뜨릴 수 있다.
+본 연구는 정상 이미지의 배경 문맥을 최대한 보존하면서 결함을 국소적으로 삽입하는 합성 프레임워크 \textit{RDI-Net}을 제안한다.
+핵심 아이디어는 전체 이미지를 새로 생성하는 대신, 결함 마스크 영역에서만 잔차(residual)와 블렌딩 맵을 생성하여 결함을 ``삽입하고 조화(harmonize)''하는 것이다.
+우리는 MVTec AD의 다섯 개 카테고리(bottle, cable, capsule, hazelnut, metal\_nut)에서 결함 K-shot 설정($K\in\{1,5,10\}$)을 구성하고, ResNet-18 기반 이진 분류기에서 image-level AUROC로 효용을 평가한다.
+또한 합성 데이터가 ``너무 티가 나서'' 모델이 합성 인공물에 과적합하는 위험을 통제하기 위해, 실제 결함 패치와 합성 결함 패치의 구분 가능성(real-vs-synthetic discriminability)을 별도의 편향 점검(bias check)으로 보고한다.
+\end{abstract}
+
+\section{Introduction}
+산업 현장에서의 비전 기반 검사(visual inspection)는 결함을 조기에 탐지해 품질과 안전을 보장하는 핵심 공정이다.
+그러나 실제 데이터 수집 과정에서는 정상 샘플이 대량으로 축적되는 반면, 결함은 발생 빈도 자체가 낮고 다양한 유형으로 분산되기 때문에 라벨이 달린 결함 데이터를 충분히 확보하기 어렵다.
+이와 같은 극단적 클래스 불균형은 지도 학습 기반 분류기에서 특히 치명적이며, 결함 클래스의 다양성을 학습하지 못해 결정경계가 불안정해지거나 특정 결함 패턴에 과적합되는 문제가 발생한다.
+
+이러한 맥락에서 합성 데이터는 결함 샘플의 ``절대량''을 보완할 수 있는 실용적 수단이지만, 합성의 품질을 무엇으로 정의할 것인지는 단순하지 않다.
+예를 들어, 정상 이미지 위에 결함 패치를 단순히 붙여넣는 방식은 구현이 쉽지만, 결함 경계 주변에 비자연스러운 블렌딩 흔적이 남기 쉽고, 모델이 결함 자체가 아니라 합성 흔적을 단서로 삼아 과적합하는 위험이 있다.
+반대로 전체 이미지를 생성하는 대규모 생성 모델은 데이터와 계산 요구가 크며, 희소 모드를 안정적으로 학습시키기 어렵다.
+
+본 연구는 ``불균형 환경에서 유용한 결함 합성''을 목표로, 결함을 전역적으로 생성하는 대신 국소 삽입 문제로 재정의한다.
+구체적으로 RDI-Net은 정상 배경을 최대한 유지한 채 결함 영역에서만 잔차 및 블렌딩 맵을 예측하여 합성 결함을 생성한다.
+또한 실험 프로토콜을 재현 가능하게 구성하기 위해 MVTec AD에서 K-shot 결함 설정($K\in\{1,5,10\}$)을 만들고, 분류기 기반 이상 탐지에서 image-level AUROC를 주요 지표로 사용한다.
+마지막으로 합성 데이터가 만들어내는 잠재적 편향을 점검하기 위해, 실제 결함 패치와 합성 결함 패치가 얼마나 쉽게 구분되는지를 별도 지표로 보고한다.
+
+\section{Problem Setup}
+정상 이미지를 $x\in\mathbb{R}^{H\times W\times 3}$, 결함 마스크를 $m\in\{0,1\}^{H\times W}$로 두자.
+훈련 시점에서 결함 샘플은 카테고리별로 $K$개만 주어진다고 가정하며($K$-shot), 이들 결함과 마스크를 이용해 추가적인 합성 결함 이미지 $\tilde{x}$를 생성한다.
+다운스트림 과제는 정상/결함 이진 분류기에 기반한 이상 탐지이며, 테스트 셋에서 image-level AUROC를 최대화하는 것을 목표로 한다.
+
+\section{Method}
+\subsection{Baselines}
+베이스라인으로는 (i) 결함 패치를 정상 이미지 위에 직접 삽입하는 Copy-Paste와, (ii) 마스크 경계를 완화하여 삽입 흔적을 줄이려는 간단한 블렌딩 변형(poisson-like)을 구현한다.
+이때 결함 패치는 K-shot 결함 이미지와 마스크로부터 추출한 패치 뱅크에서 샘플링하며, 각 정상 이미지에 결함을 1개만 삽입하도록 고정해 합성량에 의한 효과를 최소화한다.
+
+\subsection{RDI-Net (to be completed)}
+RDI-Net은 정상 이미지 $x$, 결함 마스크 $m$, 결함 프로토타입 패치 $p$를 입력으로 받아 잔차 $r$과 블렌딩 맵 $\alpha$를 출력한다.
+최종 합성 이미지는 다음과 같이 정의한다.
+\[
+\tilde{x} = x + \alpha \odot m \odot r.
+\]
+여기서 $\odot$는 원소별 곱이다.
+설계 의도는 명확하다. 마스크 외부에서는 $x$를 거의 변경하지 않으면서, 마스크 내부에서는 결함 패턴을 생성하고 경계 부근에서는 $\alpha$를 통해 자연스럽게 조화시킨다.
+학습은 (i) 정상 영역 보존(Identity) 항, (ii) 경계 매끄러움(seam/TV) 항, (iii) 결함 패치 수준의 현실감을 위한 약한 적대적 손실, (iv) (선택적으로) 사전학습 인코더 임베딩에서 결함 영역의 통계(모멘트/공분산)를 보존하는 항으로 구성한다.
+이러한 구성은 불균형 환경에서 결함 모드의 붕괴를 완화하면서도, 결함-배경 간 문맥 정합성을 유지하는 것을 목표로 한다.
+
+\section{Experiments}
+\subsection{Dataset and Protocol}
+우리는 MVTec AD의 다섯 개 카테고리(bottle, cable, capsule, hazelnut, metal\_nut)를 사용한다.
+해상도는 256으로 고정한다.
+K-shot 결함 프로토콜은 재현성을 위해 고정 시드로 구성하며, 테스트 셋은 각 카테고리의 표준 테스트 구조를 유지한다.
+
+\subsection{Metrics}
+주요 지표는 테스트 셋에서의 image-level AUROC이다.
+또한 합성 편향을 점검하기 위해, 실제 결함 패치와 합성 결함 패치를 구분하는 이진 분류기의 AUROC를 함께 보고한다.
+이 값이 지나치게 높다면(=매우 쉽게 구분된다면) 합성 인공물이 강하다는 신호로 해석할 수 있다.
+
+\subsection{Results}
+표~\ref{tab:main}은 파이프라인 출력(\texttt{outputs/baselines/summary.csv})으로부터 채워진다.
+
+\begin{table}[t]
+\centering
+\caption{Image-level AUROC (5개 카테고리 평균). 파이프라인 결과로 채움.}
+\label{tab:main}
+\begin{tabular}{lccc}
+\toprule
+Method & $K=1$ & $K=5$ & $K=10$ \\
+\midrule
+No synth & -- & -- & -- \\
+Copy-Paste & -- & -- & -- \\
+Poisson-like & -- & -- & -- \\
+PaDiM-lite (normal-only) & -- & -- & -- \\
+RDI-Net (ours) & -- & -- & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+그림~\ref{fig:auroc_k}는 \texttt{scripts/make\_figures.py}가 생성한 K에 따른 평균 AUROC 변화를 시각화한다.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.7\linewidth]{../outputs/figures/auroc_vs_k_mean.png}
+\caption{K-shot에 따른 평균 AUROC 변화(베이스라인).}
+\label{fig:auroc_k}
+\end{figure}
+
+\section{Discussion}
+본 절에서는 불균형이 심한 구간(특히 $K=1$)에서 합성 증강이 도움이 되는 조건과, 반대로 합성 인공물이 강해 모델이 잘못된 단서에 의존하게 되는 조건을 논의한다.
+또한 real-vs-synthetic 편향 점검 결과를 통해, 단순히 AUROC를 올리는 합성이 아니라 ``탐지에 유용하면서도 자연스러운'' 합성이 무엇인지 해석한다.
+
+\section{Conclusion}
+본 연구는 K-shot 결함 환경에서 결함 삽입 기반 합성 데이터를 활용해 분류기 기반 이상 탐지 성능을 개선하는 문제를 다루었다.
+우리는 재현 가능한 데이터 분할과 베이스라인을 포함한 end-to-end 파이프라인을 제공하고, RDI-Net을 통해 국소 결함 삽입 및 조화에 기반한 합성 전략을 제안한다.
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}
+
+

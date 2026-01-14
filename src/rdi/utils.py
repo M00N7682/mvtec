@@ -63,3 +63,18 @@ def set_mps_friendly_env() -> None:
     os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 
+def resolve_device(preferred: str) -> str:
+    """
+    Resolve desired device string to an actually available torch device.
+    Returns: "mps" or "cpu".
+    """
+    try:
+        import torch
+
+        if preferred == "mps" and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            return "mps"
+    except Exception:
+        pass
+    return "cpu"
+
+
