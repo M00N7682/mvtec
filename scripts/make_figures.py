@@ -22,8 +22,8 @@ def main():
     ap.add_argument(
         "--methods",
         nargs="*",
-        default=["no_synth", "copy_paste", "poisson_like"],
-        help="Classifier baseline methods to plot",
+        default=["no_synth", "copy_paste", "poisson_like", "rdi_net"],
+        help="Classifier methods to plot (e.g., no_synth copy_paste poisson_like rdi_net)",
     )
     args = ap.parse_args()
 
