@@ -86,8 +86,16 @@ def synthesize_one(
     out = base.copy()
     used = np.zeros((image_size, image_size), dtype=np.float32)
 
+    # If patch is larger than canvas (can happen with scale>1), crop to fit safely.
+    nh2 = min(nh, image_size - oy)
+    nw2 = min(nw, image_size - ox)
+    if nh2 <= 0 or nw2 <= 0:
+        return out, used
+
+    patch = patch[:nh2, :nw2, :]
+    pmask = pmask[:nh2, :nw2]
     alpha = pmask[..., None]
-    roi = out[oy : oy + nh, ox : ox + nw, :]
+    roi = out[oy : oy + nh2, ox : ox + nw2, :]
 
     if mode in ("alpha", "poisson_like"):
         # poisson_like is approximated by blurred alpha (cheap, no opencv dependency)
@@ -101,8 +109,8 @@ def synthesize_one(
             alpha = blurred[..., None]
 
         blended = _alpha_blend(roi, patch, alpha)
-        out[oy : oy + nh, ox : ox + nw, :] = blended
-        used[oy : oy + nh, ox : ox + nw] = np.maximum(used[oy : oy + nh, ox : ox + nw], alpha[..., 0])
+        out[oy : oy + nh2, ox : ox + nw2, :] = blended
+        used[oy : oy + nh2, ox : ox + nw2] = np.maximum(used[oy : oy + nh2, ox : ox + nw2], alpha[..., 0])
 
     return out, used
 

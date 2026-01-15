@@ -2,8 +2,6 @@ import argparse
 import sys
 from pathlib import Path
 
-import pandas as pd
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -11,6 +9,8 @@ if str(REPO_ROOT) not in sys.path:
 from scripts.env312 import activate_local_deps
 
 activate_local_deps()
+
+import pandas as pd
 
 from rdi.utils import RunPaths, load_json, ensure_dir
 
@@ -44,6 +44,12 @@ def main():
                             "auroc": obj["auroc"],
                         }
                     )
+
+            # ours (RDI-Net)
+            mpath = rp.outputs_dir / "rdi_net" / cat / f"k{k}" / "metrics.json"
+            if mpath.exists():
+                obj = load_json(mpath)
+                rows.append({"family": "clf", "method": "rdi_net", "category": cat, "k": k, "auroc": obj["auroc"]})
 
             # padim
             ppath = rp.outputs_dir / "padim_lite" / cat / f"k{k}" / "metrics.json"

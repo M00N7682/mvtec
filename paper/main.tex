@@ -72,6 +72,8 @@ K-shot 결함 프로토콜은 재현성을 위해 고정 시드로 구성하며,
 
 \subsection{Results}
 표~\ref{tab:main}은 파이프라인 출력(\texttt{outputs/baselines/summary.csv})으로부터 채워진다.
+본 절의 수치는 단일 시드(42)에서의 결과이며, 분류기는 256 해상도에서 3 epoch로 학습하였다(정상 200장 + 합성 결함 200장, $K\in\{1,5,10\}$).
+합성은 $K$-shot 결함 패치 뱅크에서 샘플링하여 정상 이미지에 결함을 1개 삽입하는 방식으로 구성하였다.
 
 \begin{table}[t]
 \centering
@@ -81,14 +83,17 @@ K-shot 결함 프로토콜은 재현성을 위해 고정 시드로 구성하며,
 \toprule
 Method & $K=1$ & $K=5$ & $K=10$ \\
 \midrule
-No synth & -- & -- & -- \\
-Copy-Paste & -- & -- & -- \\
-Poisson-like & -- & -- & -- \\
-PaDiM-lite (normal-only) & -- & -- & -- \\
-RDI-Net (ours) & -- & -- & -- \\
+\input{tables/baseline_mean_rows}
 \bottomrule
 \end{tabular}
 \end{table}
+
+표~\ref{tab:main}에서 베이스라인 합성은 특히 $K=1$에서 No synth 대비 평균 AUROC를 개선하는 경향을 보이며, $K$가 증가함에 따라 추가 합성의 이득은 감소한다.
+한편 정상-only 계열인 PaDiM-lite는 $K$ 변화에 크게 민감하지 않고 안정적으로 높은 AUROC를 보인다.
+이 관찰은 ``소수 결함 라벨을 활용한 지도 학습''과 ``정상-only 이상 탐지''가 서로 다른 장단점을 가진다는 점을 시사한다.
+합성의 편향은 표~\ref{tab:bias}의 real-vs-synthetic 구분 가능성으로 추가 분석한다.
+
+\input{tables/bias_mean_table}
 
 그림~\ref{fig:auroc_k}는 \texttt{scripts/make\_figures.py}가 생성한 K에 따른 평균 AUROC 변화를 시각화한다.
 

@@ -10,6 +10,9 @@ def _run(cmd: list[str]):
     print("\n$ " + " ".join(cmd))
     subprocess.run(cmd, check=True)
 
+def _exists(path: Path) -> bool:
+    return path.exists() and path.is_file() and path.stat().st_size > 0
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -32,6 +35,10 @@ def main():
         for k in args.ks:
             # Baselines (classifier)
             for method in ["no_synth", "copy_paste", "poisson_like"]:
+                expected = REPO_ROOT / "outputs" / "baselines" / method / cat / f"k{k}" / "metrics.json"
+                if _exists(expected):
+                    print(f"[SKIP] exists {expected}")
+                    continue
                 _run(
                     [
                         py,
@@ -56,25 +63,33 @@ def main():
                 )
 
             # PaDiM-lite (normal-only)
-            _run(
-                [
-                    py,
-                    str(REPO_ROOT / "scripts" / "run_padim.py"),
-                    "--category",
-                    cat,
-                    "--k",
-                    str(k),
-                    "--seed",
-                    str(args.seed),
-                    "--image_size",
-                    str(args.image_size),
-                    "--train_normals",
-                    str(args.train_normals),
-                ]
-            )
+            expected = REPO_ROOT / "outputs" / "padim_lite" / cat / f"k{k}" / "metrics.json"
+            if _exists(expected):
+                print(f"[SKIP] exists {expected}")
+            else:
+                _run(
+                    [
+                        py,
+                        str(REPO_ROOT / "scripts" / "run_padim.py"),
+                        "--category",
+                        cat,
+                        "--k",
+                        str(k),
+                        "--seed",
+                        str(args.seed),
+                        "--image_size",
+                        str(args.image_size),
+                        "--train_normals",
+                        str(args.train_normals),
+                    ]
+                )
 
             # bias check for synth methods
             for method in ["copy_paste", "poisson_like"]:
+                expected = REPO_ROOT / "outputs" / "bias_check" / method / cat / f"k{k}" / "metrics.json"
+                if _exists(expected):
+                    print(f"[SKIP] exists {expected}")
+                    continue
                 _run(
                     [
                         py,
